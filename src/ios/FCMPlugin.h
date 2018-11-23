@@ -1,7 +1,8 @@
 #import <UIKit/UIKit.h>
 #import <Cordova/CDVPlugin.h>
+@import Firebase;
 
-@interface FCMPlugin : CDVPlugin
+@interface FCMPlugin : CDVPlugin<FIRMessagingDelegate>
 {
     //NSString *notificationCallBack;
 }

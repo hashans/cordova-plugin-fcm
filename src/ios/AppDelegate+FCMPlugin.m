@@ -10,14 +10,11 @@
 #import <objc/runtime.h>
 #import <Foundation/Foundation.h>
 
-#import "Firebase.h"
 
 #if defined(__IPHONE_10_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_10_0
 @import UserNotifications;
 #endif
 
-@import FirebaseInstanceID;
-@import FirebaseMessaging;
 
 // Implement UNUserNotificationCenterDelegate to receive display notification via APNS for devices
 // running iOS 10 and above. Implement FIRMessagingDelegate to receive data message via FCM for
@@ -50,8 +47,8 @@ NSString *const kGCMMessageIDKey = @"gcm.message_id";
     [self application:application customDidFinishLaunchingWithOptions:launchOptions];
 
     NSLog(@"DidFinishLaunchingWithOptions");
- 
-    
+
+
     // Register for remote notifications. This shows a permission dialog on first run, to
     // show the dialog at a more appropriate time move this registration accordingly.
     if (floor(NSFoundationVersionNumber) <= NSFoundationVersionNumber_iOS_7_1) {
@@ -82,14 +79,14 @@ NSString *const kGCMMessageIDKey = @"gcm.message_id";
             | UNAuthorizationOptionBadge;
             [[UNUserNotificationCenter currentNotificationCenter] requestAuthorizationWithOptions:authOptions completionHandler:^(BOOL granted, NSError * _Nullable error) {
             }];
-            
+
             // For iOS 10 display notification (sent via APNS)
             [UNUserNotificationCenter currentNotificationCenter].delegate = self;
             // For iOS 10 data message (sent via FCM)
-            [FIRMessaging messaging].remoteMessageDelegate = self;
+            [FIRMessaging messaging].delegate = self;
 #endif
         }
-        
+
         [[UIApplication sharedApplication] registerForRemoteNotifications];
         // [END register_for_notifications]
     }
@@ -119,17 +116,17 @@ NSString *const kGCMMessageIDKey = @"gcm.message_id";
     if (userInfo[kGCMMessageIDKey]) {
         NSLog(@"Message ID 1: %@", userInfo[kGCMMessageIDKey]);
     }
-    
+
     // Print full message.
     NSLog(@"%@", userInfo);
-    
+
     NSError *error;
     NSDictionary *userInfoMutable = [userInfo mutableCopy];
     NSData *jsonData = [NSJSONSerialization dataWithJSONObject:userInfoMutable
                                                        options:0
                                                          error:&error];
     [FCMPlugin.fcmPlugin notifyOfMessage:jsonData];
-    
+
     // Change this to your preferred presentation option
     completionHandler(UNNotificationPresentationOptionNone);
 }
@@ -142,16 +139,16 @@ didReceiveNotificationResponse:(UNNotificationResponse *)response
     if (userInfo[kGCMMessageIDKey]) {
         NSLog(@"Message ID 2: %@", userInfo[kGCMMessageIDKey]);
     }
-    
+
     // Print full message.
     NSLog(@"aaa%@", userInfo);
-    
+
     NSError *error;
     NSDictionary *userInfoMutable = [userInfo mutableCopy];
-    
+
 
         NSLog(@"New method with push callback: %@", userInfo);
-        
+
         [userInfoMutable setValue:@(YES) forKey:@"wasTapped"];
         NSData *jsonData = [NSJSONSerialization dataWithJSONObject:userInfoMutable
                                                            options:0
@@ -159,7 +156,7 @@ didReceiveNotificationResponse:(UNNotificationResponse *)response
         NSLog(@"APP WAS CLOSED DURING PUSH RECEPTION Saved data: %@", jsonData);
         lastPush = jsonData;
 
-    
+
     completionHandler();
 }
 #endif
@@ -178,13 +175,13 @@ didReceiveNotificationResponse:(UNNotificationResponse *)response
     }
 
     NSLog(@"Message ID: %@", userInfo[@"gcm.message_id"]);
-    
+
     NSError *error;
     NSDictionary *userInfoMutable = [userInfo mutableCopy];
-    
+
     if (application.applicationState != UIApplicationStateActive) {
         NSLog(@"New method with push callback: %@", userInfo);
-        
+
         [userInfoMutable setValue:@(YES) forKey:@"wasTapped"];
         NSData *jsonData = [NSJSONSerialization dataWithJSONObject:userInfoMutable
                                                            options:0
@@ -240,18 +237,24 @@ fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler
 // [END receive_message iOS < 10]
 // [END message_handling]
 
-
 // [START refresh_token]
 - (void)tokenRefreshNotification:(NSNotification *)notification
 {
     // Note that this callback will be fired everytime a new token is generated, including the first
     // time. So if you need to retrieve the token as soon as it is available this is where that
     // should be done.
-    NSString *refreshedToken = [[FIRInstanceID instanceID] token];
-    NSLog(@"InstanceID token: %@", refreshedToken);
-    [FCMPlugin.fcmPlugin notifyOfTokenRefresh:refreshedToken];
-    // Connect to FCM since connection may have failed when attempted before having a token.
-    [self connectToFcm];
+    [[FIRInstanceID instanceID] instanceIDWithHandler:^(FIRInstanceIDResult * _Nullable result,
+                                                        NSError * _Nullable error) {
+        if (error != nil) {
+            NSLog(@"Error fetching remote instance ID: %@", error);
+        } else {
+            NSLog(@"Remote instance ID token: %@", result.token);
+            NSLog(@"InstanceID token: %@", result.token);
+            [FCMPlugin.fcmPlugin notifyOfTokenRefresh:result.token];
+            // Connect to FCM since connection may have failed when attempted before having a token.
+            [self connectToFcm];
+        }
+    }];
 
     // TODO: If necessary send token to appliation server.
 }
@@ -260,22 +263,20 @@ fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler
 // [START connect_to_fcm]
 - (void)connectToFcm
 {
-    
-    // Won't connect since there is no token
-    if (![[FIRInstanceID instanceID] token]) {
-        return;
-    }
-    
-    // Disconnect previous FCM connection if it exists.
-    [[FIRMessaging messaging] disconnect];
-    
-    [[FIRMessaging messaging] connectWithCompletion:^(NSError * _Nullable error) {
+    [[FIRInstanceID instanceID] instanceIDWithHandler:^(FIRInstanceIDResult * _Nullable result,
+                                                        NSError * _Nullable error) {
         if (error != nil) {
-            NSLog(@"Unable to connect to FCM. %@", error);
+            NSLog(@"Error fetching remote instance ID: %@", error);
         } else {
-            NSLog(@"Connected to FCM.");
-            [[FIRMessaging messaging] subscribeToTopic:@"/topics/ios"];
-            [[FIRMessaging messaging] subscribeToTopic:@"/topics/all"];
+            NSLog(@"Remote instance ID token: %@", result.token);
+            // Won't connect since there is no token
+            if (result.token) {
+                [FIRMessaging messaging].shouldEstablishDirectChannel = true;
+
+                NSLog(@"Connected to FCM.");
+                [[FIRMessaging messaging] subscribeToTopic:@"ios"];
+                [[FIRMessaging messaging] subscribeToTopic:@"all"];
+            }
         }
     }];
 }
@@ -292,7 +293,7 @@ fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler
 - (void)applicationDidEnterBackground:(UIApplication *)application
 {
     NSLog(@"app entered background");
-    [[FIRMessaging messaging] disconnect];
+    [FIRMessaging messaging].shouldEstablishDirectChannel = false;
     [FCMPlugin.fcmPlugin appEnterBackground];
     NSLog(@"Disconnected from FCM");
 }

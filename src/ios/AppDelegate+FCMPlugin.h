@@ -9,6 +9,7 @@
 #import "AppDelegate.h"
 #import <UIKit/UIKit.h>
 #import <Cordova/CDVViewController.h>
+@import Firebase;
 
 @interface AppDelegate (FCMPlugin)
 
