@@ -54,6 +54,17 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
     }
     // [END receive_message]
 
+    // [START onTokenRefresh]
+    @Override
+    public void onNewToken(String token) {
+        Log.d(TAG, "Refreshed token: " + token);
+        FCMPlugin.sendTokenRefresh( token );
+
+        // TODO: Implement this method to send any registration to your app's servers.
+        //sendRegistrationToServer(refreshedToken);
+    }
+    // [END onTokenRefresh]
+
     /**
      * Create and show a simple notification containing the received FCM message.
      *
